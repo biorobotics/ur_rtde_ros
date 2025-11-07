@@ -189,6 +189,8 @@ public:
         auto servo_rate_hz = declare_parameter<double>("servo_rate_hz", 0);
         servo_j_lookahead_time_ = declare_parameter<double>("servo_j_lookahead_time", DEFAULT_SERVO_J_LOOKAHEAD_TIME);
         servo_j_gain_ = declare_parameter<double>("servo_j_gain", DEFAULT_SERVO_J_GAIN);
+        servo_l_lookahead_time_ = declare_parameter<double>("servo_l_lookahead_time", 0.1); // within [0.03, 0.2]
+        servo_l_gain_ = declare_parameter<double>("servo_l_gain", 300.0); // within [100, 2000]
 
         base_frame_ = prefix + "base"; // not base_link
         rtde_ctrl_ = std::make_unique<ur_rtde::RTDEControlInterface>(hostname);
@@ -230,6 +232,11 @@ public:
                 rclcpp::ServicesQoS(),
                 [this](const std_msgs::msg::Bool::UniquePtr m){ set_teach_mode_enabled(*m); }
             ),
+            create_subscription<geometry_msgs::msg::PoseStamped>(
+                "servo_tool_linear",
+                rclcpp::SensorDataQoS(),
+                [this](const geometry_msgs::msg::PoseStamped::UniquePtr m){ servo_tool_linear(*m); }
+),
         };
 
         RCLCPP_INFO(get_logger(), "Servo rate: %.2f Hz", 1.0/secondsf(rate_->period()).count());
@@ -368,7 +375,46 @@ public:
             state_ = State::READY;
         }
     }
+    void servo_tool_linear(const geometry_msgs::msg::PoseStamped& m)
+{
+    // Only allow servoing when READY or already SERVOING
+    if (state_ != State::READY && state_ != State::SERVOING) {
+        RCLCPP_WARN(get_logger(), "Discarding 'servo_tool_linear' command - not ready!");
+        return;
+    }
 
+    // Ensure target pose is expressed in the robot's base frame
+    if (m.header.frame_id != base_frame_) {
+        RCLCPP_WARN_STREAM(get_logger(),
+                           "Discarding 'servo_tool_linear' command with target frame '"
+                            << m.header.frame_id << "' (expected '" << base_frame_ << "')");
+        return;
+    }
+
+    // Enqueue the servoL command
+    enqueue_command([this, pose = convert_pose(m.pose)]() {
+        if (state_ != State::SERVOING) {
+            rate_->reset();
+            state_ = State::SERVOING;
+        }
+
+        // send servoL command (real-time Cartesian interpolation)
+        if (!rtde_ctrl_->servoL(pose,
+                        0, 0,
+                        secondsf(rate_->period()).count(),
+                        servo_l_lookahead_time_,
+                        servo_l_gain_))
+
+        {
+            RCLCPP_WARN(get_logger(), "ServoL command failed");
+        }
+
+        if (!rate_->sleep()) {
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 500,
+                "ServoL cycle time overstepped");
+        }
+    });
+}
 private:
     template<typename Callable>
     void enqueue_command(Callable&& f)
@@ -444,6 +490,9 @@ private:
     std::atomic<bool> cmd_loop_stopped_;
     double servo_j_lookahead_time_;
     double servo_j_gain_;
+    double servo_l_lookahead_time_;
+    double servo_l_gain_;
+
 };
 
 int main(int argc, char* argv[])

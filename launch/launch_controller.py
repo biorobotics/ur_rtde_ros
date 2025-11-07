@@ -8,7 +8,7 @@ def generate_launch_description():
             namespace='ur',
             executable='ur_control',
             parameters=[
-                {"hostname": "192.168.122.47"}
+                {"hostname": "192.168.0.103"}
             ]
         )
     ])
