@@ -17,10 +17,12 @@
 #include <mutex>
 #include <thread>
 
-#define DEFAULT_CONTROL_RATE_HZ 125.0
-#define DEFAULT_UPDATE_RATE_HZ 125.0
-#define DEFAULT_SERVO_J_LOOKAHEAD_TIME 0.1
-#define DEFAULT_SERVO_J_GAIN 300.0
+#define DEFAULT_CONTROL_RATE_HZ 500.0 //125.0
+#define DEFAULT_UPDATE_RATE_HZ 500.0 //125.0
+#define DEFAULT_SERVO_J_LOOKAHEAD_TIME 0.1 
+#define DEFAULT_SERVO_J_GAIN 2000.0 // 300.0
+#define DEFAULT_SERVO_L_LOOKAHEAD_TIME 0.1 //0.1 //lower means smaller window, more unstable.
+#define DEFAULT_SERVO_L_GAIN 300.0
 
 using namespace std::chrono_literals;
 
@@ -189,8 +191,8 @@ public:
         auto servo_rate_hz = declare_parameter<double>("servo_rate_hz", 0);
         servo_j_lookahead_time_ = declare_parameter<double>("servo_j_lookahead_time", DEFAULT_SERVO_J_LOOKAHEAD_TIME);
         servo_j_gain_ = declare_parameter<double>("servo_j_gain", DEFAULT_SERVO_J_GAIN);
-        servo_l_lookahead_time_ = declare_parameter<double>("servo_l_lookahead_time", 0.1); // within [0.03, 0.2]
-        servo_l_gain_ = declare_parameter<double>("servo_l_gain", 300.0); // within [100, 2000]
+        servo_l_lookahead_time_ = declare_parameter<double>("servo_l_lookahead_time", DEFAULT_SERVO_L_LOOKAHEAD_TIME); // within [0.03, 0.2]
+        servo_l_gain_ = declare_parameter<double>("servo_l_gain", DEFAULT_SERVO_L_GAIN); // within [100, 2000]
 
         base_frame_ = prefix + "base"; // not base_link
         rtde_ctrl_ = std::make_unique<ur_rtde::RTDEControlInterface>(hostname);
